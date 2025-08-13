@@ -16,7 +16,7 @@ from .dedupe import compute_pdf_hash, quarantine_file
 
 
 def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
-                dedupe_mode: str = 'quarantine', duplicates_dir: str = '_duplicates'):
+                dedupe_mode: str = 'quarantine', duplicates_dir: str = '_duplicates', skipped_dir: str = '_skipped'):
     if verbose:
         print(f"[PDF] {pdf_path}")
 
@@ -38,7 +38,13 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
     candidate_author = author_md
 
     if not candidate_title:
-        if verbose: print("  Could not guess a title; skipping.")
+        if verbose:
+            print("  Could not guess a title; moving to skipped folder.")
+        if not dry_run:
+            # reuse the same move helper we use for duplicates
+            from .dedupe import quarantine_file
+            target_dir = os.path.join(os.path.dirname(pdf_path), skipped_dir)
+            quarantine_file(pdf_path, target_dir)
         return
 
     item = best_crossref_match(candidate_title, candidate_author)
@@ -103,7 +109,7 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
 
 def process_folder(folder_path: str, bib_filename: str = BIB_FILENAME, dry_run=False, verbose=False,
                    use_tracker: bool = True, rebuild_tracker: bool = False,
-                   dedupe_mode: str = 'quarantine', duplicates_dir: str = '_duplicates'):
+                   dedupe_mode: str = 'quarantine', duplicates_dir: str = '_duplicates', skipped_dir: str = '_skipped'):
     bib_path = os.path.join(folder_path, bib_filename)
     linked = get_linked_pdf_basenames(bib_path)
 
@@ -132,7 +138,7 @@ def process_folder(folder_path: str, bib_filename: str = BIB_FILENAME, dry_run=F
         pdf_path = os.path.join(folder_path, name)
         try:
             process_pdf(pdf_path, bib_path, dry_run=dry_run, verbose=verbose,
-                        dedupe_mode=dedupe_mode, duplicates_dir=duplicates_dir)
+                        dedupe_mode=dedupe_mode, duplicates_dir=duplicates_dir, skipped_dir=skipped_dir)
             if use_tracker and not dry_run:
                 mark_processed(folder_path, name)
         except Exception as e:
