@@ -7,11 +7,24 @@ def build_parser():
     p.add_argument("--bib", default="library.bib", help="Bib file name to create/update (default: library.bib)")
     p.add_argument("--dry-run", action="store_true", help="Preview actions without writing changes")
     p.add_argument("--verbose", action="store_true", help="Verbose output")
+    p.add_argument("--dedupe", choices=["skip", "quarantine", "replace"], default="quarantine",
+               help="How to handle duplicate PDFs (default: quarantine)")
+    p.add_argument("--duplicates-dir", default="_duplicates",
+               help="Folder name for quarantined duplicates (default: _duplicates)")
     return p
 
 def main():
     args = build_parser().parse_args()
-    process_folder(args.path, bib_filename=args.bib, dry_run=args.dry_run, verbose=args.verbose)
+    process_folder(
+    args.path,
+    bib_filename=args.bib,
+    dry_run=args.dry_run,
+    verbose=args.verbose,
+    use_tracker=not args.no_tracker,
+    rebuild_tracker=args.rebuild_tracker,
+    dedupe_mode=args.dedupe,
+    duplicates_dir=args.duplicates_dir,
+)
 
 if __name__ == "__main__":
     main()

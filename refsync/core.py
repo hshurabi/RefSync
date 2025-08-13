@@ -5,6 +5,9 @@ from .crossref_client import (best_crossref_match, bibtex_from_doi,
                               first_author_lastname, year_from_item, first_word_of_title, words_of_title)
 from .bib_utils import parse_bibtex_to_entry, upsert_bib_entry, safe_bib_key, add_or_update_file_field
 from .file_utils import rename_pdf, build_unique_stem
+from .dedupe import compute_pdf_hash, quarantine_file
+from .tracker import load_tracker, save_tracker, is_tracked, mark_processed, mark_hash, seen_hash
+
 
 def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
                 dedupe_mode: str = 'quarantine', duplicates_dir: str = '_duplicates'):
