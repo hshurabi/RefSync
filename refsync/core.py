@@ -42,7 +42,6 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
             print("  Could not guess a title; moving to skipped folder.")
         if not dry_run:
             # reuse the same move helper we use for duplicates
-            from .dedupe import quarantine_file
             target_dir = os.path.join(os.path.dirname(pdf_path), skipped_dir)
             quarantine_file(pdf_path, target_dir)
         return
