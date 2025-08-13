@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/refsync"
+Homepage = "https://github.com/hshurabi/RefSync"
 
 [project.scripts]
 refsync = "refsync.cli:main"
