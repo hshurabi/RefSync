@@ -12,11 +12,19 @@ from .bib_utils import (
 )
 from .file_utils import rename_pdf, build_unique_stem
 from .tracker import load_tracker, save_tracker, is_tracked, mark_processed, mark_hash, seen_hash
-from .dedupe import compute_pdf_hash, quarantine_file
+from .dedupe import compute_pdf_hash, quarantine_file, ensure_dir
 
 
 def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
                 dedupe_mode: str = 'quarantine', duplicates_dir: str = '_duplicates', skipped_dir: str = '_skipped'):
+    def _move_to_skipped() -> None:
+        if verbose:
+            print("  Moving to skipped folder.")
+        if not dry_run:
+            target_dir = os.path.join(os.path.dirname(pdf_path), skipped_dir)
+            ensure_dir(target_dir)
+            quarantine_file(pdf_path, target_dir)  # keeps original basename, avoids overwrite
+
     if verbose:
         print(f"[PDF] {pdf_path}")
 
@@ -28,9 +36,12 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
         if dedupe_mode == 'skip':
             return
         elif dedupe_mode == 'quarantine' and not dry_run:
-            quarantine_file(pdf_path, os.path.join(os.path.dirname(pdf_path), duplicates_dir))
+            dup_dir = os.path.join(os.path.dirname(pdf_path), duplicates_dir)
+            # Use the original processed basename from tracker (already in your structured format)
+            data = load_tracker(os.path.dirname(pdf_path))
+            desired = (data.get("hashes", {}) or {}).get(h)  # e.g., "Smith2021DeepLearning.pdf"
+            quarantine_file(pdf_path, dup_dir, new_basename=desired)
             return
-        # 'replace' falls through (not implemented yet)
 
     # Metadata & lookup
     title_md, author_md, first_page = read_pdf_metadata(pdf_path)
@@ -40,20 +51,19 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
     if not candidate_title:
         if verbose:
             print("  Could not guess a title; moving to skipped folder.")
-        if not dry_run:
-            # reuse the same move helper we use for duplicates
-            target_dir = os.path.join(os.path.dirname(pdf_path), skipped_dir)
-            quarantine_file(pdf_path, target_dir)
+        _move_to_skipped()
         return
 
     item = best_crossref_match(candidate_title, candidate_author)
     if not item:
         if verbose: print("  No Crossref match; skipping.")
+        _move_to_skipped()
         return
 
     doi = item.get("DOI")
     if not doi:
         if verbose: print("  No DOI; skipping.")
+        _move_to_skipped()
         return
 
     # DOI-based dedupe
@@ -64,13 +74,26 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
         if dedupe_mode == 'skip':
             return
         elif dedupe_mode == 'quarantine' and not dry_run:
-            quarantine_file(pdf_path, os.path.join(os.path.dirname(pdf_path), duplicates_dir))
+            dup_dir = os.path.join(os.path.dirname(pdf_path), duplicates_dir)
+            ensure_dir(dup_dir)  # so we can check existing stems in that folder
+
+            # Build a structured stem from Crossref metadata for the duplicate
+            flast = first_author_lastname(item) or "Unknown"
+            y = year_from_item(item) or ""
+            twords = words_of_title(item) or ["Untitled"]
+
+            # Build a unique stem *within the duplicates folder*
+            stem = build_unique_stem(dup_dir, (flast, y), twords)
+
+            # Move+rename to something like Smith2021DeepLearning.pdf under _duplicates/
+            quarantine_file(pdf_path, dup_dir, new_basename=stem + ".pdf")
             return
 
     bib_str = bibtex_from_doi(doi)
     entry = parse_bibtex_to_entry(bib_str)
     if not entry:
         if verbose: print("  Failed to parse BibTeX; skipping.")
+        _move_to_skipped()
         return
 
     # Ensure key fields
