@@ -51,7 +51,7 @@
 ## Installation
 
 ```bash
-git clone https://github.com/<yourusername>/refsync.git
+git clone https://github.com/hshurabi/RefSync.git
 cd refsync
 pip install -e .
 ```
@@ -209,6 +209,8 @@ Options:
   --dedupe {skip,quarantine,replace}
                            Duplicate policy (default: quarantine)
   --duplicates-dir NAME    Folder for quarantined duplicates (default: _duplicates)
+
+  --skipped-dir NAME       Folder for skipped files (default: _skipped)
 ```
 
 ---
@@ -229,6 +231,7 @@ Garcia2020Bayesian.pdf
 library.bib
 .refsync-tracker.json
 _duplicates/  (if duplicates were quarantined)
+_skipped/ (if any error occured files moved here)
 ```
 
 Example entry:

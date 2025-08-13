@@ -9,7 +9,7 @@ description = "Rename PDFs, fetch citations, and update BibTeX with JabRef-frien
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
-authors = [{name = "Your Name"}]
+authors = [{name = "Hamed Shourabizadeh"}]
 dependencies = [
     "requests",
     "bibtexparser",
