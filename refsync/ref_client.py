@@ -107,11 +107,11 @@ def best_metadata_match(candidate_title: str, candidate_author: str = "") -> dic
     items = crossref_data.get("message", {}).get("items", [])
 
     # Get 1 from Semantic Scholar
-    # semsch_items = semantic_scholar_query(normalized_candidate, limit=1)
+    semsch_items = semantic_scholar_query(normalized_candidate, limit=1)
 
     # Combine results
-    # if len(semsch_items) > 0:
-    #     items =  items + [normalize_semantic_item(semsch_items[0])]
+    if len(semsch_items) > 0:
+        items =  items + [normalize_semantic_item(semsch_items[0])]
     items.sort(key=lambda it: _score_item(it, normalized_candidate, candidate_author), reverse=True)
     for item in items:
         crossref_title = item.get("title", [""])[0]
