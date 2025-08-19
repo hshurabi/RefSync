@@ -2,7 +2,7 @@
 import os
 from turtle import title
 from .config import BIB_FILENAME
-from .metadata_extraction import read_pdf_metadata, guess_title_from_first_page
+from .metadata_extraction import read_pdf_metadata, guess_title_from_first_page, title_from_filename
 from .ref_client import (
     best_metadata_match, bibtex_from_doi,
     first_author_lastname, year_from_item, words_of_title, needs_title_case_fix, fix_title_case
@@ -55,16 +55,22 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
         )
 
     # Metadata & lookup
-    title_md, author_md, first_page = read_pdf_metadata(pdf_path)
+    title_md, candidate_author, first_page = read_pdf_metadata(pdf_path)
     found_match = False
     if _is_plausible_title(title_md):
         candidate_title = title_md
-        item = best_metadata_match(title_md, author_md)
+        item = best_metadata_match(candidate_title, candidate_author)
         if item and item.get("_title_match_flag"):
             found_match = True
     else:
-        candidate_title = None
-    candidate_author = author_md
+        title_file_name = title_from_filename(pdf_path)
+        if _is_plausible_title(title_file_name):
+            candidate_title = title_file_name
+            item = best_metadata_match(candidate_title, candidate_author)
+            if item and item.get("_title_match_flag"):
+                found_match = True
+        else:
+            candidate_title = None
 
     if not found_match:
         lines = [line.strip() for line in first_page.split('\n') if line.strip()]

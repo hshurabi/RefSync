@@ -1,4 +1,7 @@
 import fitz  # PyMuPDF
+import os
+import re
+
 
 def read_pdf_metadata(pdf_path: str):
     doc = fitz.open(pdf_path)
@@ -10,6 +13,16 @@ def read_pdf_metadata(pdf_path: str):
         text_first_page = doc[0].get_text("text")
     doc.close()
     return title, author, text_first_page
+
+def title_from_filename(pdf_path: str) -> str:
+    fname = os.path.basename(pdf_path)
+    fname = os.path.splitext(fname)[0]
+    # Replace underscores/dashes with spaces
+    title = re.sub(r"[_\-0-9]+", " ", fname).strip()
+    # Remove leading/trailing numbers or junk
+    title = re.sub(r"^\d+\s*|\s*\d+$", "", title)
+    return title
+
 
 def guess_title_from_first_page(text_first_page: str, start_line: int = 1) -> str:
    
