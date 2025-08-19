@@ -1,6 +1,8 @@
 import os
 import re
 import bibtexparser
+STOPWORDS = {"a", "an", "the", "of", "in", "on", "for", "and", "to", "at", "by", "with", "from"}
+
 
 def parse_bibtex_to_entry(bib_str: str):
     db = bibtexparser.loads(bib_str)
@@ -30,17 +32,27 @@ def upsert_bib_entry(bib_path: str, new_entry: dict, dry_run=False):
             bibtexparser.dump(db, f)
 
 def safe_bib_key(entry: dict) -> str:
-    au = entry.get("author", "")
     year = entry.get("year", "")
-    title = entry.get("title", "")
+    title = entry.get("title", "")[0]
+    authors = entry.get("author", [])
+    author_strs = []
+    for a in authors:
+        family = a.get("family", "").strip()
+        given = a.get("given", "").strip()
+        author_strs.append(f"{family}, {given}".strip(", "))
+
     last = ""
-    if au:
-        last = re.split(r"\band\b", au)[0].strip()
+    if author_strs:
+        last = re.split(r"\band\b", author_strs[0])[0].strip().lower()
         last = re.split(r"[ ,]", last)[-1]
-    fw = re.sub(r"[^A-Za-z0-9]+", " ", title).strip().split()
-    fw = fw[0] if fw else ""
+    words = re.sub(r"[^A-Za-z0-9]+", " ", title).strip().split()
+    if words:
+        fw = words[0].lower()
+        if fw in STOPWORDS and len(words) > 1:
+            fw = fw + "_" + words[1].lower()
+    else:
+        fw = ""
     key = f"{last}{year}{fw}".replace(" ", "")
-    key = re.sub(r"[^A-Za-z0-9]", "", key)
     return key or "unnamed"
 
 def add_or_update_file_field(entry: dict, pdf_rel_path: str):

@@ -1,11 +1,10 @@
 # refsync/core.py
 import os
-from turtle import title
 from .config import BIB_FILENAME
 from .metadata_extraction import read_pdf_metadata, guess_title_from_first_page
 from .ref_client import (
-    best_metadata_match, bibtex_from_doi,
-    first_author_lastname, year_from_item, words_of_title, needs_title_case_fix, fix_title_case
+    best_crossref_match, bibtex_from_doi,
+    first_author_lastname, year_from_item, words_of_title
 )
 from .bib_utils import (
     parse_bibtex_to_entry, upsert_bib_entry, safe_bib_key,
@@ -56,60 +55,11 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
 
     # Metadata & lookup
     title_md, author_md, first_page = read_pdf_metadata(pdf_path)
-    found_match = False
     if _is_plausible_title(title_md):
         candidate_title = title_md
-        item = best_metadata_match(title_md, author_md)
-        if item and item.get("_title_match_flag"):
-            found_match = True
     else:
-        candidate_title = None
+        candidate_title = guess_title_from_first_page(first_page, start_line=1)
     candidate_author = author_md
-
-    if not found_match:
-        lines = [line.strip() for line in first_page.split('\n') if line.strip()]
-        max_lines = min(10, len(lines))
-        for start in range(max_lines):
-            # Try with just this line
-            title_try = lines[start]
-            words = title_try.split()
-            if (len(words) >= 4 and
-                sum(c.isdigit() for c in title_try) < 5 and
-                sum(c.isalpha() for c in title_try) > 10 and
-                not any(w.lower() in ["copyright", "doi"] for w in words[:3])
-                ):
-                item = best_metadata_match(title_try, candidate_author)
-                if item and item.get("_title_match_flag"):
-                    candidate_title = title_try
-                    found_match = True
-                    break
-                elif item and not item.get("_title_match_flag"):
-                    # Try with next line added
-                    if start + 1 < len(lines):
-                        combined_title = title_try + " " + lines[start + 1]
-                        item2 = best_metadata_match(combined_title, candidate_author)
-                        if item2 and item2.get("_title_match_flag"):
-                            candidate_title = combined_title
-                            item = item2
-                            found_match = True
-                            break
-                        elif item2 and not item2.get("_title_match_flag"):
-                            # Try with next line added
-                            if start + 1 < len(lines):
-                                combined_title = combined_title + " " + lines[start + 1]
-                                item3 = best_metadata_match(combined_title, candidate_author)
-                                if item3 and item3.get("_title_match_flag"):
-                                    candidate_title = combined_title
-                                    item = item3
-                                    found_match = True
-                                    break
-
-        
-    if not found_match:
-        if verbose:
-            print("  Could not guess a plausible title with good Crossref match; moving to skipped folder.")
-        _move_to_skipped()
-        return
 
     if not candidate_title:
         if verbose:
@@ -117,71 +67,50 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
         _move_to_skipped()
         return
 
+    item = best_crossref_match(candidate_title, candidate_author)
+    if not item:
+        if verbose: print("  No Crossref match; skipping.")
+        _move_to_skipped()
+        return
+
     doi = item.get("DOI")
     if not doi:
-        if verbose: print("  No DOI; building BibTeX from metadata.")
-        # Build BibTeX entry from item metadata
-        entry = {
-            "ID": safe_bib_key(item),
-            "ENTRYTYPE": "article",
-            "title": item.get("title", [""])[0] if item.get("title") else "",
-            "author": " and ".join(
-                [f"{a.get('family','')}, {a.get('given','')}".strip(", ") for a in item.get("author", []) if a]
-            ),
-            "year": year_from_item(item) or item.get("year", ""),
-            "file": os.path.basename(pdf_path),
-            "_title_match_flag": "true" if item.get("_title_match_flag") else "false",
-            "_manual_entry_flag": "true"
-        }
-    else:
-        bib_str = bibtex_from_doi(doi)
-        entry = parse_bibtex_to_entry(bib_str)
-        if not entry:
-            if verbose: print("  Failed to parse BibTeX; skipping.")
-            _move_to_skipped()
-            return
-    # Fix uppercased titles
-    
-    if entry and entry.get("title", "") and needs_title_case_fix(entry["title"]):
-        entry["title"] = fix_title_case(entry["title"])
-    # dedupe
-    dup_flag = False
+        if verbose: print("  No DOI; skipping.")
+        _move_to_skipped()
+        return
+
+    # DOI-based dedupe
     has_doi, linked_base = bib_has_doi_with_file(bib_path, doi)
     if has_doi and linked_base:
         if verbose:
             print(f"  [dup] DOI already in bib with linked file: {linked_base}")
-            dup_flag = True
-    elif linked_base:
-        # Check for existing entry with same title and author
-        with open(bib_path, "r", encoding="utf-8") as f:
-            bib_content = f.read()
-        # Parse all entries
-        entries = [parse_bibtex_to_entry(e) for e in bib_content.split("@") if e.strip()]
-        for e in entries:
-            if (
-                e.get("title", "").strip().lower() == entry.get("title", "").strip().lower() and
-                e.get("author", "").strip().lower() == entry.get("author", "").strip().lower()
-            ):
-                if verbose:
-                    print(f"  [debug] Title+author already in bib: {e.get('ID', '')}")
-                    dup_flag = True
-    if dup_flag and dedupe_mode == 'quarantine' and not dry_run:
-        dup_dir = os.path.join(os.path.dirname(pdf_path), duplicates_dir)
-        ensure_dir(dup_dir)  # so we can check existing stems in that folder
+        if dedupe_mode == 'skip':
+            return
+        elif dedupe_mode == 'quarantine' and not dry_run:
+            dup_dir = os.path.join(os.path.dirname(pdf_path), duplicates_dir)
+            ensure_dir(dup_dir)  # so we can check existing stems in that folder
 
-        # Build a structured stem from Crossref metadata for the duplicate
-        flast = first_author_lastname(item) or "Unknown"
-        y = year_from_item(item) or ""
-        twords = words_of_title(item) or ["Untitled"]
+            # Build a structured stem from Crossref metadata for the duplicate
+            flast = first_author_lastname(item) or "Unknown"
+            y = year_from_item(item) or ""
+            twords = words_of_title(item) or ["Untitled"]
 
-        # Build a unique stem *within the duplicates folder*
-        stem = build_unique_stem(dup_dir, (flast, y), twords)
+            # Build a unique stem *within the duplicates folder*
+            stem = build_unique_stem(dup_dir, (flast, y), twords)
 
-        # Move+rename to something like Smith2021DeepLearning.pdf under _duplicates/
-        quarantine_file(pdf_path, dup_dir, new_basename=stem + ".pdf")
+            # Move+rename to something like Smith2021DeepLearning.pdf under _duplicates/
+            quarantine_file(pdf_path, dup_dir, new_basename=stem + ".pdf")
+            return
+
+    bib_str = bibtex_from_doi(doi)
+    entry = parse_bibtex_to_entry(bib_str)
+    if not entry:
+        if verbose: print("  Failed to parse BibTeX; skipping.")
+        _move_to_skipped()
         return
-    
 
+    if item and "_title_match_flag" in item:
+        entry["Check_flag"] = "true" if item["_title_match_flag"] else "false"
     # Ensure key fields
     if "year" not in entry or not entry["year"]:
         entry["year"] = year_from_item(item) or ""

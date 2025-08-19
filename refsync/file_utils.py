@@ -1,5 +1,7 @@
 import os
 import re
+STOPWORDS = {"a", "an", "the", "of", "in", "on", "for", "and", "to", "at", "by", "with", "from"}
+
 
 def sanitize_stem(stem: str) -> str:
     stem = re.sub(r"[^A-Za-z0-9]", "", stem) or "unnamed"
@@ -45,6 +47,10 @@ def build_unique_stem(folder_path: str, prefix_components: tuple[str, str], titl
     last, year = prefix_components
     words = [w for w in title_words if w] or ["Untitled"]
     existing = existing_pdf_stems(folder_path)
+
+    # Handle StopWords
+    if words and words[0].lower() in STOPWORDS and len(words) > 1:
+        words = [f"{words[0].lower()}_{words[1].lower()}"] + words[2:]
     # try 1..max_words words
     for k in range(1, min(max_words, len(words)) + 1):
         stem = sanitize_stem(f"{last}{year}{''.join(words[:k])}")
