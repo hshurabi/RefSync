@@ -55,17 +55,15 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
         )
 
     # Metadata & lookup
-    title_md, candidate_author, first_page = read_pdf_metadata(pdf_path)
+    candidate_title, candidate_author, first_page = read_pdf_metadata(pdf_path)
     found_match = False
-    if _is_plausible_title(title_md):
-        candidate_title = title_md
+    if _is_plausible_title(candidate_title):
         item = best_metadata_match(candidate_title, candidate_author)
         if item and item.get("_title_match_flag"):
             found_match = True
     else:
-        title_file_name = title_from_filename(pdf_path)
-        if _is_plausible_title(title_file_name):
-            candidate_title = title_file_name
+        candidate_title = title_from_filename(pdf_path)
+        if _is_plausible_title(candidate_title):
             item = best_metadata_match(candidate_title, candidate_author)
             if item and item.get("_title_match_flag"):
                 found_match = True
