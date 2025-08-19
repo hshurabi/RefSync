@@ -144,10 +144,8 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
             if verbose: print("  Failed to parse BibTeX; skipping.")
             _move_to_skipped()
             return
-        # Always set a structured ID
-        entry["ID"] = safe_bib_key(entry)
-    # Fix uppercased titles
     
+    # Fix uppercased titles
     if entry and entry.get("title", "") and needs_title_case_fix(entry["title"]):
         entry["title"] = fix_title_case(entry["title"])
     # dedupe
@@ -204,9 +202,11 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
     stem = build_unique_stem(os.path.dirname(pdf_path), (flast, y), twords)
     new_pdf_path, key_stem = rename_pdf(pdf_path, (stem, "", ""), dry_run=dry_run)
 
-    # Bib entry ID + file link
-    if "ID" not in entry or not entry["ID"]:
-        entry["ID"] = safe_bib_key(entry)
+    
+    # Always same structure for bibtex key
+    # if "ID" not in entry or not entry["ID"]:
+    entry["ID"] = key_stem
+    # Bib file link
     rel_path = os.path.relpath(new_pdf_path, os.path.dirname(bib_path))
     add_or_update_file_field(entry, rel_path)
 

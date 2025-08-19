@@ -36,10 +36,11 @@ def safe_bib_key(entry: dict) -> str:
     title = entry.get("title", "")[0]
     authors = entry.get("author", [])
     author_strs = []
-    for a in authors:
-        family = a.get("family", "").strip()
-        given = a.get("given", "").strip()
-        author_strs.append(f"{family}, {given}".strip(", "))
+    if isinstance(authors, list):
+        for a in authors:
+            family = a.get("family", "").strip()
+            given = a.get("given", "").strip()
+            author_strs.append(f"{family}, {given}".strip(", "))
 
     last = ""
     if author_strs:
