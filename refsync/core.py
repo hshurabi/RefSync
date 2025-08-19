@@ -144,6 +144,8 @@ def process_pdf(pdf_path: str, bib_path: str, dry_run=False, verbose=False,
             if verbose: print("  Failed to parse BibTeX; skipping.")
             _move_to_skipped()
             return
+        # Always set a structured ID
+        entry["ID"] = safe_bib_key(entry)
     # Fix uppercased titles
     
     if entry and entry.get("title", "") and needs_title_case_fix(entry["title"]):
